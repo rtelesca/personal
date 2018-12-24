@@ -118,7 +118,7 @@ namespace QuantConnect.Algorithm.CSharp
 			                        // if found, trade it
 			                        currentPos = atmContractSPY.Symbol;
 			                        posSize = atmContractSPY.BidPrice;
-			                        MarketOrder(atmContractSPY.Symbol, 1);
+			                        MarketOrder(atmContractSPY.Symbol, 5);
 			                    }
 			                }
 		        		}
@@ -127,7 +127,7 @@ namespace QuantConnect.Algorithm.CSharp
 		        		if (Portfolio.Invested) {
 				            if ((_rsi3.Current.Value - _rsiMin3)/(_rsiMax3 - _rsiMin3) < (_rsi14.Current.Value - _rsiMin14)/(_rsiMax14 - _rsiMin14)) {
 				            		//add method to look if profit drops a certain percentage/have a parameter for percent off of top profit rather than off of initial position
-				            	MarketOrder(currentPos, -1);
+				            	MarketOrder(currentPos, 5);
 				            }
 		        		}
 	        		}
