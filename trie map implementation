@@ -1,0 +1,421 @@
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.Objects;
+
+/**
+ * Implementation of a {@link AbstractTrieMap} using a trie.
+ * <p>
+ * There are two main variables to keep in mind regarding a running time for a trie implementation:
+ * <dl>
+ * <dt>{@code N}</dt>
+ * <dd>the number of nodes in the trie</dd>
+ * <dt>{@code H}</dt>
+ * <dd>the height of the trie (length of the longest key)</dd>
+ * </dl>
+ * <p>
+ * Note that N is bounded by H * (# of keys/values in the mapping), but it will typically be
+ * significantly smaller due to key overlap.
+ * <p>
+ * Keys are of type {@link CharSequence}. This allows the implementation to make assumptions as to
+ * how data is stored, since we cannot break a key down into individual characters if the key is not
+ * made up of characters to begin with. For simplicity, keys must consist entirely of lowercase
+ * letters. The empty string is a valid key.
+ * <p>
+ * Null keys are not permitted because keys correspond directly to paths in a trie. Null values are
+ * not permitted because rather than using a sentinel node, the implementation uses null to indicate
+ * that a node does not have an associated value.
+ *
+ * @param <V>
+ *            the type of mapped values
+ */
+public class TrieMap<V> extends AbstractTrieMap<V> {
+
+    /**
+     * The size of our key alphabet or character set. Here, we use 26 for the standard lowercase
+     * alphabet. We might like to be more flexible and support full alphanumeric or even full ASCII
+     * but that would increase our overhead. Since we know something about our use case, we can
+     * stick to the lowercase alphabet and keep our overhead down.
+     */
+    static final int BRANCH_FACTOR = 26;
+
+    /**
+     * The root node of the trie.
+     */
+    Node<V> root;
+
+    /**
+     * The size of the trie.
+     */
+    int size;
+
+    /**
+     * Constructs an empty TrieMap.
+     */
+    public TrieMap() {
+        this.root = new Node<>(null);
+    }
+
+    /**
+     * Converts a {@code char} into an array index.
+     * <p>
+     * Effectively maps {@code a -> 0, b -> 1, ..., z -> 25}.
+     *
+     * @param c
+     *            the character
+     * @return the array index corresponding to the specified character
+     * @throws IllegalArgumentException
+     *             if the specified character is not valid as an index
+     */
+    static int convertToIndex(char c) {
+        if (c < 'a' || c > 'z') {
+            throw new IllegalArgumentException("Character must be in the range [a..z]");
+        }
+        return c - 'a';
+    }
+
+    /**
+     * Converts an array index into a {@code char} in the key.
+     * <p>
+     * Effectively maps {@code 0 -> a, b -> 1, ..., 25 -> z}.
+     *
+     * @param i
+     *            the index
+     * @return the character corresponding to the specified array index
+     * @throws IllegalArgumentException
+     *             if the specified index is out of bounds
+     */
+    static char convertToChar(int i) {
+        if (i < 0 || i >= BRANCH_FACTOR) {
+            throw new IllegalArgumentException("Index must be in the range [0..BRANCH_FACTOR]");
+        }
+        return (char) (i + 'a');
+    }
+
+    public Node<V> getRoot() {
+        return root;
+    }
+
+    /**
+     * Returns the number of key-value mappings in this map.
+     *
+     * @return the number of key-value mappings in this map
+     * @implSpec This method should run in O(1) time.
+     */
+    @Override
+    public int size() {
+        return size;
+    }
+
+    /* NOTE: Please do not modify anything above this line. */
+
+    /**
+     * @throws IllegalArgumentException
+     *             {@inheritDoc}
+     * @throws IllegalArgumentException
+     *             if the specified key contains characters other than lowercase letters
+     * @implSpec This method should run in O(H) time.
+     * @implSpec This method should use O(1) space.
+     */
+    @Override
+    public V put(CharSequence key, V value) {
+        V val = null;
+        if (key == null || value == null) {
+            throw new IllegalArgumentException("null parameters not allowed");
+        }
+        if (key.length() == 0) {
+            root.setValue(value);
+        }
+        Node<V> track = root;
+        if (!containsKey(key)) {
+            size++;
+        }
+        for (int i = 0; i < key.length(); i++) {
+            if (key.charAt(i) < 97 || key.charAt(i) > 122) {
+                throw new IllegalArgumentException("only lowercase character allowed");
+            }
+            if (track.getChild(key.charAt(i)) == null) {
+                if (i == key.length() - 1) {
+                    track.setChild(key.charAt(i), new Node<V>(value));
+                    track.getChild(key.charAt(i)).setLast(track);
+                } else {
+                    track.setChild(key.charAt(i), new Node<V>(null));
+                    track.getChild(key.charAt(i)).setLast(track);
+                }
+            } else {
+                if (i == key.length() - 1) {
+                    val = track.getChild(key.charAt(key.length() - 1)).getValue();
+                    track.getChild(key.charAt(key.length() - 1)).setValue(value);
+                }
+            }
+            track = track.getChild(key.charAt(i));
+        }
+        return val;
+    }
+
+    /**
+     * @throws IllegalArgumentException
+     *             {@inheritDoc}
+     * @throws IllegalArgumentException
+     *             if the specified key contains characters other than lowercase letters
+     * @implSpec This method should run in O(H) time.
+     * @implSpec This method should use O(1) space.
+     */
+    @Override
+    public V get(CharSequence key) {
+        if (key == null) {
+            throw new IllegalArgumentException("null parameters not allowed");
+        }
+        if (size == 0) {
+            return null;
+        }
+        Node<V> track = root;
+        for (int i = 0; i < key.length(); i++) {
+            if (key.charAt(i) < 97 || key.charAt(i) > 122) {
+                throw new IllegalArgumentException("only lowercase character allowed");
+            }
+            track = track.getChild(key.charAt(i));
+        }
+        return track.getValue();
+    }
+
+    /**
+     * @throws IllegalArgumentException
+     *             {@inheritDoc}
+     * @throws IllegalArgumentException
+     *             if the specified key contains characters other than lowercase letters
+     * @implSpec This method should run in O(H) time.
+     * @implSpec This method should use O(1) space.
+     */
+    @Override
+    public boolean containsKey(CharSequence key) {
+        if (key == null) {
+            throw new IllegalArgumentException("null parameters not allowed");
+        }
+        if (size == 0) {
+            return false;
+        }
+        Node<V> track = root;
+        for (int i = 0; i < key.length(); i++) {
+            if (key.charAt(i) < 97 || key.charAt(i) > 122) {
+                throw new IllegalArgumentException("only lowercase character allowed");
+            }
+            if (track.getChild(key.charAt(i)) == null) {
+                return false;
+            } else {
+                track = track.getChild(key.charAt(i));
+            }
+            if (i == key.length() - 1 && track.getValue() != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * @throws IllegalArgumentException
+     *             if the value provided is null
+     * @implSpec This method should run in O(N) time.
+     */
+    @Override
+    public boolean containsValue(Object value) {
+        LinkedList<Node<V>> que = new LinkedList<Node<V>>();
+        boolean ins = false;
+        que.add(root);
+        Node<V> tempor = root;
+
+        while (!que.isEmpty()) {
+            for (int i = 0; i < 26; i++) {
+                if (tempor.getChild(convertToChar(i)) != null) {
+                    que.add(tempor.getChild((char) (i + 97)));
+                }
+            }
+            if (tempor.getValue() == value) {
+                ins = true;
+            }
+            tempor = que.pollFirst();
+        }
+
+        return ins;
+    }
+
+    /**
+     * @throws IllegalArgumentException
+     *             {@inheritDoc}
+     * @throws IllegalArgumentException
+     *             if the specified key contains characters other than lowercase letters
+     * @implSpec This method should run in O(H) time.
+     * @implSpec This method should use O(1) space.
+     */
+    @Override
+    public V remove(CharSequence key) {
+        Node<V> temp = null;
+        V save = null;
+        if (key == null) {
+            throw new IllegalArgumentException("cannot store null keys");
+        }
+        if (key == "") {
+            save = root.getValue();
+            root.setValue(null);
+            size--;
+            return save;
+        }
+        Node<V> track = root;
+        for (int i = 0; i < key.length(); i++) {
+            if (key.charAt(i) < 97 || key.charAt(i) > 122) {
+                throw new IllegalArgumentException("only lowercase character allowed");
+            }
+            if (track.getChild(key.charAt(i)) == null) {
+                throw new IllegalArgumentException("key not in tree");
+            }
+            track = track.getChild(key.charAt(i));
+        }
+
+        save = track.getValue();
+        if (containsKey(key)) {
+            size--;
+        }
+        for (int i = key.length() - 1; i > -1; i--) {
+            temp = track.getLast();
+            temp.setChild(key.charAt(i), null);
+            if (temp.hasChildren() || (track.getValue() != null && i != key.length() - 1)) {
+                temp.setChild(key.charAt(i), track);
+                break;
+            }
+            track = temp;
+            temp = temp.getLast();
+        }
+        return save;
+    }
+
+    /**
+     * @implSpec This method should run in O(1) time.
+     */
+    @Override
+    public void clear() {
+        root = new Node<>(null);
+        root.initChildren();
+        size = 0;
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * The {@link CharSequence} keys of the {@link Map.Entry} instances in the resulting iteration
+     * are mutable and should not be referenced directly. Instead, one should call
+     * {@link CharSequence#toString()} on the key to get an immutable reference.
+     * <p>
+     * The iterator must produce entries in lexicographic order. For example, {@code ("party", 99),
+     * ("pen", 24), ("penguin", 2), ("q", 17)}
+     * <p>
+     * This method is for extra kudos, which is worth no points (but many pats on the back). To
+     * receive full kudos, your implementation must satisfy the asymptotic complexities for running
+     * time and space. An optimal implementation will use space proportional to at most the height
+     * of the trie.
+     *
+     * @implSpec This method should run in O(1) time.
+     * @implSpec The returned iterator should have O(1) operations.
+     * @implSpec The returned iterator should use O(H) space.
+     * @implNote For partial kudos, the space usage of this method can be relaxed to O(V).
+     * @implNote You will receive no kudos if you dump all of the elements of the trie into a
+     *           collection and return an iterator over that collection.
+     */
+    @Override
+    public Iterator<Entry<CharSequence, V>> entryIterator() {
+        return null;
+    }
+
+    @Override
+    public String toString() {
+        return "";
+    }
+
+    /**
+     * Carrier for a value and an array of children.
+     */
+    static class Node<V> {
+        private Node<V>[] children;
+        private V value;
+        private Node<V> last;
+
+        Node(V value) {
+            this.value = value;
+            this.children = null;
+        }
+
+        @SuppressWarnings("unchecked")
+        public void initChildren() {
+            this.children = (Node<V>[]) new Node<?>[BRANCH_FACTOR];
+        }
+
+        /**
+         * Returns {@code true} if this node has child nodes.
+         *
+         * @return {@code true} if this node has child nodes
+         */
+        public boolean hasChildren() {
+            return children != null && Arrays.stream(children).anyMatch(Objects::nonNull);
+        }
+
+        /**
+         * Retrieves the child node associated with the specified character, or {@code null} if
+         * there is no such child.
+         *
+         * @param c
+         *            the character
+         * @return the child node for the specified character, or {@code null} if there is no such
+         *         child
+         */
+        public Node<V> getChild(char c) {
+            if (children == null) {
+                return null;
+            }
+            return children[convertToIndex(c)];
+        }
+
+        /**
+         * Sets the child node corresponding to the specified character to the specified node.
+         * 
+         * @param c
+         *            the character corresponding to the child to set
+         * @param node
+         *            the node to add as a child
+         */
+        public void setChild(char c, Node<V> node) {
+            if (children == null) {
+                initChildren();
+            }
+            children[convertToIndex(c)] = node;
+        }
+
+        /**
+         * Returns {@code true} if this node has a value.
+         *
+         * @return {@code true} if this node has a value
+         */
+        public boolean hasValue() {
+            return value != null;
+        }
+
+        /**
+         * Returns the value at this node.
+         *
+         * @return the value at this node
+         */
+        public V getValue() {
+            return value;
+        }
+
+        public void setValue(V val) {
+            value = val;
+        }
+
+        public Node<V> getLast() {
+            return last;
+        }
+
+        public void setLast(Node<V> val) {
+            last = val;
+        }
+    }
+}
