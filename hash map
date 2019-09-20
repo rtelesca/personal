@@ -1,0 +1,239 @@
+#include "hash.h"
+
+
+/**
+* @input - A number of buckets, the size to make the hash table.
+* Should assign space for the hash_struct pointer, all buckets, and should
+* initialize all entries as KEY = -1, VALUE = -1 to begin.
+* 
+*/
+
+hash_struct* initTable(int num_of_buckets){
+    hash_struct* table = malloc(sizeof(hash_struct));
+    table->buckets = malloc(sizeof(data_entry*) * num_of_buckets);
+    data_entry* init;
+    table->num_of_buckets = num_of_buckets;
+    for (int i = 0; i < num_of_buckets; i++) {
+        init = malloc(sizeof(data_entry));
+        init->key = -1;
+        init->value = -1;
+        table->buckets[i] = init;
+    }
+
+    return table;
+}
+
+
+/*
+* @input : Some key value.
+* @returns : The key value modulated by the size of the hash table.
+*/
+
+int hashcode(hash_struct* table, int key){
+  if (key >= 0) {
+    return key % table->num_of_buckets;
+  } else {
+    int newKey = -1 * key;
+    return table->num_of_buckets - (newKey - (newKey/table->num_of_buckets)*table->num_of_buckets);
+  }
+}
+
+/*
+* @input : Some key value, table pointer.
+* @returns : The data entry if some matching (key, value) pair exists, otherwise returns NULL.
+*/
+data_entry* get(hash_struct* table, int key){
+    int index = hashcode(table, key);
+    data_entry* pointMe = table->buckets[index];
+    if (pointMe->key != -1 || pointMe->value != -1) {
+      return pointMe;
+    }
+  
+    return NULL;
+}
+
+/*
+* @input : Some key value, table pointer.
+* @returns : True only if a valid key exists that maps to this value.
+*/
+bool contains(hash_struct* table, int key){
+  int index = 0;
+  int hash = hashcode(table, key);
+  data_entry* pointMe = table->buckets[hash];
+  while (index < table->num_of_buckets) {
+    if (index == table->num_of_buckets - hash) {
+      index = 0;
+    }
+    pointMe = table->buckets[index + hash];
+    if (key == pointMe->key) {
+      return true;
+    }
+    if (pointMe->key == -1 && pointMe->value == -1) {
+      return false;
+    }
+    index++;
+  }
+  return false;
+}
+
+/*
+* @input : Some key integer.
+* @input : Some value,.
+* @returns : void. Places (key, value) pairing into map.
+* Replaces value if another pairing with this key already exists.
+* Do nothing if the table is full!
+*/
+void put(hash_struct* table, int key, int value){
+  int index = 0;
+  int hash = hashcode(table, key);
+  if ((key == -1 && value == -1) || isFull(table)) {
+    return;
+  }
+  data_entry* pointMe = table->buckets[hash];
+  while (index < table->num_of_buckets) {
+    if (index == table->num_of_buckets - hash) {
+      index = 0;
+    }
+    pointMe = table->buckets[index + hash];
+    if (key == pointMe->key) {
+      pointMe->value = value;
+      return;
+    }
+    if (pointMe->key == -1 && pointMe->value == -1) {
+      pointMe->key = key;
+      pointMe->value = value;
+      table->size++;
+      return;
+    }
+    index++;
+  }
+}
+
+/*
+* @returns : The number of valid (key, value) pairings in the table.
+*/
+int size(hash_struct* table){
+        return table->size;
+}
+
+/*
+* Iterates through the table and resets all entries.
+*/
+void clear(hash_struct* table){
+  data_entry* pointMe = *table->buckets;
+  
+  for (int i = 0; i < table->num_of_buckets; i++) {
+    pointMe = table->buckets[i];
+    pointMe->key = -1;
+    pointMe->value = -1;
+  }
+  table->size = 0;
+}
+
+/*
+* @returns : true, only if the table contains 0 valid (key, value) pairings.
+*/
+bool isEmpty(hash_struct* table){
+  return table->size == 0;
+}
+
+
+/*
+* @returns : true, only when the table is filled entirely with VALID values.
+*/
+bool isFull(hash_struct* table){
+  return table->size == table->num_of_buckets;
+}
+
+
+/*
+* @input : Some key value.
+* @returns : void. if a pair exists for this key, reinitialize this entry.
+*/
+void removeEntry(hash_struct* table, int key) {
+  data_entry* pointMe = *table->buckets;
+  
+  for (int i = 0; i < table->num_of_buckets; i++) {
+    pointMe = table->buckets[i];
+    if (pointMe->key == key) {
+      pointMe->key = -1;
+      pointMe->value = -1;
+      table->size--;
+    }
+  }
+}
+
+
+/*
+* Debugging function.
+* Iterates through the hashTable and prints all NON-NULL (key, value) pairings.
+* Print statement should be of the form "(key1, value1), (key2, value2), ...."
+*/
+void printEntries(hash_struct* table){
+  data_entry* pointMe = *table->buckets;
+  int entries = size(table);
+  
+  for (int i = 0; i < table->num_of_buckets; i++) {
+    pointMe = table->buckets[i];
+    if (pointMe->key != -1 || pointMe->value != -1) {
+      if (i != entries - 1) {
+        printf("(");
+        printf("%d, ", pointMe->key);
+        printf("%d", pointMe->value);
+        printf("), ");
+      } else {
+        printf("(");
+        printf("%d, ", pointMe->key);
+        printf("%d", pointMe->value);
+        printf(")\n");
+      }
+    }
+  }
+}
+
+/*
+* Debugging function.
+* Iterates though the hashTable and prints ALL entries in order.
+* If a value is not valid, you will print "EMPTY" for the value.
+* Entry print Format: "(INDEX: tableIndex, KEY: key, VALUE: value)"
+* Example :  "(INDEX: 0, KEY: 0, VALUE: 3), (INDEX: 1, KEY: EMPTY, VALUE: EMPTY), (INDEX: 2, KEY: 2, VALUE: 49), ..."
+*/
+void printFullTable(hash_struct* table){
+  data_entry* pointMe = *table->buckets;
+  
+  for (int i = 0; i < table->num_of_buckets; i++) {
+    pointMe = table->buckets[i];
+    if (pointMe->key != -1 || pointMe->value != -1) {
+      if (i != table->num_of_buckets - 1) {
+        printf("(");
+        printf("%d, ", pointMe->key);
+        printf("%d", pointMe->value);
+        printf("), ");
+      } else {
+        printf("(");
+        printf("%d, ", pointMe->key);
+        printf("%d", pointMe->value);
+        printf(")\n");
+      }
+    } else {
+      if (i != table->num_of_buckets - 1) {
+        printf("(EMPTY, EMPTY)");
+      } else {
+        printf("(EMPTY, EMPTY)");
+      }
+    }
+  }
+}
+
+/**
+* Should free all space consumed by the hash table.
+*/
+void done(hash_struct* table){
+    for (int i = 0; i < table->num_of_buckets; i++) {
+        free(table->buckets[i]);
+    }
+  
+    free(table->buckets);
+  
+    free(table);
+}
