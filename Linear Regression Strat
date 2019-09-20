@@ -1,0 +1,112 @@
+using static System.Math;
+namespace QuantConnect {
+
+    //
+    //	Make sure to change "BasicTemplateAlgorithm" to your algorithm class name, and that all
+    //	files use "public partial class" if you want to split up your algorithm namespace into multiple files.
+    //
+
+    //public partial class BasicTemplateAlgorithm : QCAlgorithm, IAlgorithm
+    //{
+    //  Extension functions can go here...(ones that need access to QCAlgorithm functions e.g. Debug, Log etc.)
+    //}
+
+    public class Indicator 
+    {
+    	public class Lsrl{
+    		private int n;
+    		private double[] xs;
+    		private double[] ys;
+    		private double r;
+    		private double a;
+    		private double b;
+    		private double stderr;
+    		public Lsrl(double[] xData, double[] yData){
+    			xs = xData;
+    			ys = yData;
+    			n = xData.Length;
+    		}
+    		public void runReg(){
+    			r = pcc();
+    			b = cov(xs, ys) / vari(xs);
+    			a = mean(ys) - mean(xs) * b;
+    			double numer = 0.0;
+    			for (int i = 0; i < xs.Length; i++){
+    				numer += square(ys[i] - predict(xs[i]));
+    			}
+    			stderr = System.Math.Sqrt(numer / (double) n);
+    		}
+    		public void printReg(){
+    			Console.WriteLine("r: " + r);
+    			Console.WriteLine("LSRL: " + a + " + " + b + "x");
+    			Console.WriteLine("Standard Error: " + stderr);
+    		}
+    		public void printValues(){
+    			String s = "";
+    			foreach (double x in xs){
+    				s += x + ",";
+    			}
+    			Console.WriteLine(s);
+    			s = "";
+    			foreach (double y in ys){
+    				s += y + ",";
+    			}
+    			Console.WriteLine(s);
+    		}
+    		public int range(double x, double y){
+    			//0.7
+    			if (r < 0.40){
+    				return 0;
+    			}
+    			double threshold = 2;
+    			double lineValue = predict(x);
+    			double lower = lineValue - stderr * threshold;
+    			double upper = lineValue + stderr * threshold;
+    			if (y <= lower){
+    				return -1;
+    			}
+    			if (y < upper){
+    				return 0;
+    			}
+    			return 1;
+    		}
+    		public double predict(double x){
+    			return a + b * x;
+    		}
+    		public double getStderr(){
+    			return stderr;
+    		}
+    		private double pcc(){
+    			return cov(xs, ys) / (stdev(xs) * stdev(ys));
+    		}
+    		private static double sum(double[] data){
+    			double ret = 0;
+    			foreach (double d in data) {
+    				ret += d;
+    			}
+    			return ret;
+    		}
+    		private static double mean(double[] data){
+    			return sum(data) / (double) data.Length;
+    		}
+    		private static double cov(double[] xs, double[] ys){
+    			double ret = 0;
+    			double xbar = mean(xs);
+    			double ybar = mean(ys);
+    			for (int i = 0; i < xs.Length; i++){
+    				ret += (xs[i] - xbar)*(ys[i] - ybar);
+    			}
+    			return ret;
+    		}
+    		private static double vari(double[] data){
+    			return cov(data, data);
+    		}
+    		private static double stdev(double[] data){
+    			return System.Math.Sqrt(vari(data));
+    		}
+    		private static double square(double x){
+    			return x * x;
+    		}
+    	}
+    }
+}
