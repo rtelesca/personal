@@ -1,3 +1,5 @@
+//with Eddie updates onMarketOpen
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -27,14 +29,21 @@ namespace QuantConnect.Algorithm.CSharp
         public string currentPos;
         RelativeStrengthIndex _rsi3;
         RelativeStrengthIndex _rsi14;
-        decimal _rsiMax3 = 0;
-        decimal _rsiMax14 = 0;
-        decimal _rsiMin3 = 100;
-        decimal _rsiMin14 = 100;
-        decimal topProf = 0;
+        decimal _rsiMax3 = 0m;
+        decimal _rsiMax14 = 0m;
+        decimal _rsiMin3 = 100m;
+        decimal _rsiMin14 = 100m;
+        decimal topProf = 0m;
         RollingWindow<decimal> rsi3 = new RollingWindow<decimal>(3);
         RollingWindow<decimal> rsi14 = new RollingWindow<decimal>(14);
-        decimal posSize = 0;
+        decimal posSize = 0m;
+        
+        Dictionary<Symbol, decimal> _purchasePrice = new Dictionary<Symbol, decimal>();
+    	Dictionary<Symbol, int> _quantity = new Dictionary<Symbol, int>();
+    
+		DateTime _dt;
+    	bool _canBuy = false;
+    	
 		//add int for each symbol that track days since last closed position
 		//or some other stop that will keep it from reacting to short term fake signals
 
@@ -47,9 +56,9 @@ namespace QuantConnect.Algorithm.CSharp
             SetEndDate(2017, 12, 24);
             SetCash(100000);
 
-            var equitySPY = AddEquity(UnderlyingTickerSPY, Resolution.Minute);
+            var equitySPY = AddEquity(UnderlyingTickerSPY, Resolution.Daily);
             var optionSPY = AddOption(UnderlyingTickerSPY);
-            var equityVIX = AddEquity(UnderlyingTickerVIX, Resolution.Minute);
+            var equityVIX = AddEquity(UnderlyingTickerVIX, Resolution.Daily);
             var optionVIX = AddOption(UnderlyingTickerVIX);
             _rsi3 = RSI("SPY", 3,  MovingAverageType.Simple, Resolution.Daily);
             _rsi14 = RSI("SPY", 14,  MovingAverageType.Simple, Resolution.Daily);
@@ -58,44 +67,55 @@ namespace QuantConnect.Algorithm.CSharp
             
             // set our strike/expiry filter for this option chain
             optionSPY.SetFilter(u => u.Strikes(0, +10)
-                                   .Expiration(TimeSpan.Zero, TimeSpan.FromDays(90)));
+                                   .Expiration(TimeSpan.Zero, TimeSpan.FromDays(30)));
 
             // use the underlying equity as the benchmark
             SetBenchmark(equitySPY.Symbol);
+            
+            
+            Schedule.On(DateRules.EveryDay(equitySPY.Symbol), 
+            	TimeRules.AfterMarketOpen(equitySPY.Symbol, 1),
+            	onMarketOpen);
         }
-
-        /// <summary>
-        /// Event - v3.0 DATA EVENT HANDLER: (Pattern) Basic template for user to override for receiving all subscription data in a single event
-        /// </summary>
-        /// <param name="slice">The current slice of data keyed by symbol string</param>
-        public override void OnData(Slice slice) {
+        
+        private void onMarketOpen() {
+        	
+        //	Console.WriteLine("is running");
+        	
         	if (Portfolio.Invested) {
         		if (Portfolio.TotalUnrealisedProfit > topProf) {
         			topProf = Portfolio.TotalUnrealisedProfit;
         		}
-        	}
-        	rsi3.Add(_rsi3.Current.Value);
-        	rsi14.Add(_rsi14.Current.Value);
+        	} else {
+                topProf = 0;
+            }
         	
-        	if (rsi3.IsReady && rsi14.IsReady) {
-        		_rsiMax3 = 0;
-        		_rsiMax14 = 0;
-        		_rsiMin3 = 100;
-        		_rsiMin14 = 100;
-	        	for (int i = 0; i < rsi3.Size; i++) {
-					if (rsi3[i] > _rsiMax3) {
+        	if (_rsi3.IsReady && _rsi14.IsReady) {
+        		rsi3.Add(Decimal.Parse(_rsi3.Current.Value.ToString()));
+		      	rsi14.Add(Decimal.Parse(_rsi14.Current.Value.ToString()));
+		      	
+		      	if(!rsi3.IsReady || !rsi14.IsReady) {
+		      		return;
+		      	}
+		      	
+        		_rsiMax3 = 0m;
+        		_rsiMax14 = 0m;
+        		_rsiMin3 = 100m;
+        		_rsiMin14 = 100m;
+	        	for (int i = 0; i < 3; i++) {
+					if (rsi3[i].CompareTo(_rsiMax3) > 0) {
 						_rsiMax3 = rsi3[i];
 					}
-					if (rsi3[i] < _rsiMin3) {
+					if (rsi3[i].CompareTo(_rsiMin3) < 0) {
 						_rsiMin3 = rsi3[i];
 					}
 				}
 				
-				for (int j = 0; j < rsi14.Size; j++) {
-					if (rsi14[j] > _rsiMax14) {
+				for (int j = 0; j < 14; j++) {
+					if (rsi14[j].CompareTo(_rsiMax14) > 0) {
 						_rsiMax14 = rsi14[j];
 					}
-					if (rsi14[j] < _rsiMin14) {
+					if (rsi14[j].CompareTo(_rsiMin14) < 0) {
 						_rsiMin14 = rsi14[j];
 					}
 				}
@@ -103,11 +123,53 @@ namespace QuantConnect.Algorithm.CSharp
 	        	if (IsMarketOpen(UnderlyingSPY) && IsMarketOpen(UnderlyingVIX)) {
 	        	//SPY RSI check for call (only???)
 	        		if (_rsiMax3 != 0 && _rsiMax14 != 0 && _rsiMin3 != 0 && _rsiMin14 != 0 && _rsiMax3 != _rsiMin3 && _rsiMax14 != _rsiMin14) {
+		        		Console.WriteLine((_rsi3.Current.Value - _rsiMin3)/(_rsiMax3 - _rsiMin3));
+		        		Console.WriteLine((_rsi14.Current.Value - _rsiMin14)/(_rsiMax14 - _rsiMin14));
 		        		if ((_rsi3.Current.Value - _rsiMin3)/(_rsiMax3 - _rsiMin3) > (_rsi14.Current.Value - _rsiMin14)/(_rsiMax14 - _rsiMin14) && _rsi3.Current.Value < 30) {
-		                	OptionChain chainSPY;
+		                	_canBuy = true;
+		                	_dt = Time;
+		        		} else {
+		        			_canBuy = false;
+		        		}
+		        //sell signal SPY
+		 //math for early closing signal
+                // || ((Portfolio.TotalUnrealisedProfit / posSize) < (decimal) -0.1) || //Portfolio.TotalUnrealisedProfit / posSize) > (decimal) 0.25)
+		        	
+                    	if (Portfolio.Invested) {
+                    		LinkedList<Symbol> tracker = new LinkedList<Symbol>();
+				        	if ((_rsi3.Current.Value - _rsiMin3) / (_rsiMax3 - _rsiMin3) < (_rsi14.Current.Value - _rsiMin14) / (_rsiMax14 - _rsiMin14)) {
+					        		Liquidate();
+					            	_purchasePrice.Clear();
+					            	_quantity.Clear();
+							} else {
+					   			foreach (Symbol s in _purchasePrice.Keys) {
+			              			if (Portfolio[s].Price < (decimal) 0.85 * _purchasePrice[s] || Portfolio[s].Price > (decimal) 1.2 * _purchasePrice[s]) {
+			                  			MarketOrder(s, - _quantity[s]);
+			                		   	tracker.AddFirst(s);
+			                  			Log("Sold : " + _quantity[s] + " " + s);
+			                		} 
+					    		}
+			              		foreach (Symbol s in tracker) {
+			            	 		 _purchasePrice.Remove(s);
+			            	 		 _quantity.Remove(s);
+			              		}	
+					    		 tracker.Clear();
+					        }
+		        		}
+	        		}
+	        	}
+        	}
+        }
+
+        /// <summary>
+        /// Event - v3.0 DATA EVENT HANDLER: (Pattern) Basic template for user to override for receiving all subscription data in a single event
+        /// </summary>
+        /// <param name="slice">The current slice of data keyed by symbol string</param>
+        public override void OnData(Slice slice) {
+        	if (_canBuy && _dt.Date == Time.Date) {
+        		OptionChain chainSPY;
 		                //check if we have a SPY option
-			                if ( 
-			                		slice.OptionChains.TryGetValue(OptionSymbolSPY, out chainSPY)) {
+			                if (slice.OptionChains.TryGetValue(OptionSymbolSPY, out chainSPY)) {
 			                    // we find at the money (ATM) put contract with farthest expiration
 			                    var atmContractSPY = chainSPY
 			                        .OrderByDescending(x => x.Expiry)
@@ -118,21 +180,20 @@ namespace QuantConnect.Algorithm.CSharp
 			                        // if found, trade it
 			                        currentPos = atmContractSPY.Symbol;
 			                        posSize = atmContractSPY.BidPrice;
-			                        MarketOrder(atmContractSPY.Symbol, 5);
+			                        MarketOrder(atmContractSPY.Symbol, 3);
+			                        if (_purchasePrice.ContainsKey(currentPos)) {
+					                    decimal temp = _purchasePrice[currentPos];
+					                    _purchasePrice.Remove(currentPos);
+					                    _purchasePrice.Add(currentPos, (decimal) (posSize + temp) / 2);
+					                    _quantity[currentPos] += 3;
+					                } else {
+					                    _purchasePrice.Add(currentPos, (decimal) posSize);
+					                    _quantity.Add(currentPos, 3);
+					                }
 			                    }
 			                }
-		        		}
-		        //sell signal SPY
-		        // || ((Portfolio.TotalUnrealisedProfit / posSize) < (decimal) -0.1) || (Portfolio.TotalUnrealisedProfit / posSize) > (decimal) 0.25)
-		        		if (Portfolio.Invested) {
-				            if ((_rsi3.Current.Value - _rsiMin3)/(_rsiMax3 - _rsiMin3) < (_rsi14.Current.Value - _rsiMin14)/(_rsiMax14 - _rsiMin14)) {
-				            		//add method to look if profit drops a certain percentage/have a parameter for percent off of top profit rather than off of initial position
-				            	MarketOrder(currentPos, 5);
-				            }
-		        		}
-	        		}
-	        	}
         	}
+        	//TODO Liquidate
         }
 
         /// <summary>
